@@ -43,8 +43,9 @@ app.post('/api/login', async (req, res) => {
 
             //Login fonctionnel
             if(passwordMatch){
-                req.session.user = { username: username };
-                res.status(200).json({ message: 'Login fonctionnel' });
+                const user = { id: utilisateurExistant[0].id, username: utilisateurExistant[0].username };
+                req.session.user = user;                
+                res.status(200).json({ message: 'Login fonctionnel', user });
             } else {
                 //Mauvais mot de passe
                 res.status(401).json({ message: 'Mauvais mot de passe' });
@@ -60,6 +61,20 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({message: 'Internal server error'});
     }
 })
+
+//Function pour check l'authentification
+const checkAuth = (req, res, next) => {
+    if(req.session && req.session.user) {
+        next();
+    } else {
+        res.status(401).json({ message: 'Unauthorized' });
+    }
+};
+
+//Requête pour check l'authentification
+app.get('/api/check-auth', checkAuth, (req, res) => {
+    res.json({ user: req.session.user });
+});
 
 //Requête pour se déconnecter
 app.get('/api/logout', (req, res) => {
@@ -79,8 +94,8 @@ app.post('/api/register', async (req, res) => {
         const { username, password } = req.body;
         
         //Valide le data reçu
-        if(typeof username === 'undefined' || typeof password === 'undefined'){
-            return res.status(400).json({ message: 'Data invalide' });
+        if (!username || !password || username.length < 1 || password.length < 1) {
+            return res.status(400).json({ message: 'Username ou password invalide' });
         }
 
         //Vérifie que l'username n'existe pas déjà
@@ -95,8 +110,10 @@ app.post('/api/register', async (req, res) => {
         //Insère l'utilisateur
         const [results] = await pool.execute('INSERT INTO Utilisateur (username, password) VALUES (?, ?)', [username, hashedPassword]);
 
-        if(results.affectedRows === 1) {
-            res.status(201).json({ message: 'Utilisateur ajouté avec succès' });
+        if(results.affectedRows === 1) {            
+            const user = { id: results.id, username: username };
+            req.session.user = user;
+            res.status(201).json({ message: 'Utilisateur ajouté avec succès', user });                  
         } else {
             res.status(500).json({ message: 'Erreur ajout utilisateur' });
         }
@@ -109,10 +126,10 @@ app.post('/api/register', async (req, res) => {
 //Requête pour créer un nouvel évènement
 app.post('/api/create-evenement', async (req, res) => {
     try {
-        const { date, nom, utilisateurID } = req.body;
+        const { date, title, utilisateurID } = req.body;
         
         //Valide le data reçu
-        if (typeof date === 'undefined' || typeof nom === 'undefined' || typeof utilisateurID === 'undefined'){
+        if (typeof date === 'undefined' || typeof title === 'undefined' || typeof utilisateurID === 'undefined'){
             return res.status(400).json({ message: 'Data invalide' });
         }
 
@@ -123,7 +140,7 @@ app.post('/api/create-evenement', async (req, res) => {
         }
         
         //Insère l'évènement
-        const [results] = await pool.execute('INSERT INTO Evenement (date, nom, utilisateur_id) VALUES (?, ?, ?)', [date, nom, utilisateurID]);
+        const [results] = await pool.execute('INSERT INTO Evenement (date, title, utilisateur_id) VALUES (?, ?, ?)', [date, title, utilisateurID]);
 
         if (results.affectedRows === 1){
             res.status(201).json({ message: 'Évènement ajouté' });
@@ -149,7 +166,7 @@ app.get('/api/evenements/:utilisateurID', async (req, res) => {
         }
         
         //Sélectionne et retourne les évènements
-        const [evenements] = await pool.execute('SELECT * FROM Evenement WHERE utilisateur_id = ?', [utilisateurID]);
+        const [evenements] = await pool.execute('SELECT id, title, DATE_FORMAT(date, \'%Y-%m-%d\') AS date, utilisateur_id FROM Evenement WHERE utilisateur_id = ?', [utilisateurID]);
         res.status(200).json(evenements);
     } catch (error){
         console.error('Erreur de récupération des évènements:', error);
