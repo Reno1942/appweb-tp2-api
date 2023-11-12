@@ -111,7 +111,7 @@ app.post('/api/register', async (req, res) => {
         const [results] = await pool.execute('INSERT INTO Utilisateur (username, password) VALUES (?, ?)', [username, hashedPassword]);
 
         if(results.affectedRows === 1) {            
-            const user = { id: results.id, username: username };
+            const user = { id: results.insertId, username: username };
             req.session.user = user;
             res.status(201).json({ message: 'Utilisateur ajouté avec succès', user });                  
         } else {
